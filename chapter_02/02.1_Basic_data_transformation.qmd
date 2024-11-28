@@ -1,0 +1,768 @@
+---
+title: Polars data analysis and transformation
+jupyter: python3
+---
+
+
+
+The examples below use `.head()` to reduce the output to a few rows and take up less space.
+If you want the full output, remove `.head()` from the code
+
+This notebooked is divided into sections. If your code editor supports it, you can use the **Outline** functionality to easily go to the code section you are interested in.
+
+For more details on Polars functions, check out the Polars API reference: https://pola-rs.github.io/polars/py-polars/html/reference/index.html
+
+```{python}
+import polars as pl
+```
+
+```{python}
+# Configure the number of characters to show for each string column
+pl.Config.set_fmt_str_lengths(30)
+```
+
+```{python}
+# Create a sample dataset for videogames reviews
+data = {
+    "title": ["Super Mario", "Zelda", "Super Mario", None, "Halo Infinite", "Zelda"],
+    "rating": [9.5, 10, 9.5, None, 9, 8],
+    "review_date": [
+        "2023-01-15",
+        "2023-01-20",
+        "2023-01-15",
+        None,
+        "2023-02-01",
+        "2023-03-01",
+    ],
+    "review_text": ["Amazing game!", "Fun", "Amazing game!", None, None, "Good game!"],
+}
+
+video_games_reviews = pl.DataFrame(data)
+```
+
+```{python}
+video_games_reviews
+```
+
+#### Select a few rows of data
+
+```{python}
+# Show the first 2 rows of the DataFrame
+# We will use head extensively to show few rows of a dataframe
+video_games_reviews.head(2)
+```
+
+```{python}
+# Show the last 2 rows of the DataFrame
+video_games_reviews.tail(2)
+```
+
+```{python}
+# Show a sample of 2 rows of the DataFrame
+video_games_reviews.sample(2)
+```
+
+#### Information about the table
+
+```{python}
+# Schema of the table: column names and types
+video_games_reviews.schema
+```
+
+```{python}
+# Column names
+video_games_reviews.columns
+```
+
+```{python}
+# Column data types
+video_games_reviews.dtypes
+```
+
+```{python}
+# Shape of the DataFrame: number of rows and columns
+video_games_reviews.shape
+```
+
+```{python}
+# Number of rows
+video_games_reviews.height
+```
+
+```{python}
+# Number of columns
+video_games_reviews.width
+```
+
+```{python}
+# Visualize statistics about the columns: count, mean, std, min, max, etc.
+video_games_reviews.describe()
+```
+
+```{python}
+# Estimate the memory usage of the DataFrame
+video_games_reviews.estimated_size("kb")
+```
+
+#### Chain methods together
+
+```{python}
+# Visualize statistics, and show only the first 3 rows
+video_games_reviews.describe().head(3)
+```
+
+#### Sort and add row numbers
+
+```{python}
+# Sort the DataFrame by the time of review in descending order
+video_games_reviews.sort("review_date", descending=True)
+```
+
+```{python}
+# Sort the DataFrame by the title and  time of review, both in descending order
+video_games_reviews.sort(["title", "review_date"], descending=[True, True])
+```
+
+```{python}
+# Add a row number to the dataframe
+video_games_reviews.with_row_index()
+```
+
+```{python}
+# Add a row number to the dataframe, then sort in reverse order
+video_games_reviews.with_row_index().reverse()
+```
+
+#### Saving modifications
+
+```{python}
+# To keep a modified Polars dataframe, we should save it
+# We can save it to a new variable, or to the same variable
+# Here we save it to a new variable
+video_games_modified = video_games_reviews.with_row_index().reverse()
+```
+
+#### Select and rename columns
+
+##### Select
+
+```{python}
+# Select columns using their names
+video_games_reviews.select("title", "review_text")
+```
+
+```{python}
+# Select columns using a list with their names
+video_games_reviews.select(["title", "review_text"]).head(2)
+```
+
+```{python}
+# Select columns using their names with pl.col()
+video_games_reviews.select(pl.col("title"), pl.col("review_text")).head(2)
+```
+
+```{python}
+# Add suffix or prefix
+video_games_reviews.select(
+    pl.col("title").name.prefix("videogame_"),
+    pl.col("rating").name.suffix("_out_of_5"),
+    pl.col("review_text"),
+).head(2)
+```
+
+```{python}
+# Select columns with pl.col() and rename them using keywords arguments (example: videogame_title = )
+# Important: columns selected with keywords arguments should come after columns without keywords arguments
+video_games_reviews.select(
+    videogame_title=pl.col("title"),
+    rating_out_of_5=pl.col("rating"),
+    review=pl.col("review_text"),
+).head(2)
+```
+
+```{python}
+# Select columns with pl.col() and rename them using alias
+# alias should always be at the end of the expression
+video_games_reviews.select(
+    pl.col("title").alias("videogame_title"),
+    pl.col("rating").alias("rating_out_of_5"),
+    pl.col("review_text").alias("review"),
+).head(2)
+```
+
+```{python}
+# Select columns based on their data type: select all string columns
+video_games_reviews.select(pl.col(pl.String))
+```
+
+```{python}
+# Select all numerical columns
+video_games_reviews.select(pl.col(pl.NUMERIC_DTYPES))
+```
+
+```{python}
+# pl.all() can be used to select all columns
+video_games_reviews.select(pl.all())
+```
+
+```{python}
+# pl.all() and exclude can be used to exclude some columns, for example exclude all numerical columns
+video_games_reviews.select(pl.all().exclude(pl.NUMERIC_DTYPES))
+```
+
+```{python}
+# Select columns based on regex: all column names that contain 'review'
+video_games_reviews.select(pl.col("^.*review.*$")).head(2)
+```
+
+```{python}
+# Exclude columns that contain 'review'
+# Exclude can be used with regex, or with column names, or with data types
+video_games_reviews.select(pl.all().exclude("^.*review.*$")).head(2)
+```
+
+##### Using Polars selectors
+
+```{python}
+import polars.selectors as cs
+
+# returns the first column
+video_games_reviews.select(cs.first()).head(2)
+```
+
+```{python}
+# returns all numeric columns
+video_games_reviews.select(cs.numeric()).head(2)
+```
+
+```{python}
+# returns all columns containing "date"
+video_games_reviews.select(cs.contains("date")).head(2)
+```
+
+```{python}
+# returns all numeric columns except columns containing "rating"
+video_games_reviews.select(cs.numeric() - cs.contains("rating")).head(2)
+```
+
+##### With Columns
+
+```{python}
+# Another way to select columns is using with_columns() instead of select()
+# with_columns() includes all columns by default, and
+# adds or modifies the specified columns
+video_games_reviews.with_columns(
+    pl.col("rating") * 20,  # modified column
+)
+```
+
+#### Add columns
+
+```{python}
+# Add and modify columns
+# if the column has the same name => modifies a column
+# if the column has a different name => adds a new column
+# Use pl.lit() to add a new column based on a constant value
+video_games_reviews.select(
+    pl.col("title"), pl.col("rating"), category=pl.lit("videogame")
+)
+```
+
+```{python}
+# Add and modify columns
+# All columns are calculated in parallel, so rating_out_of_10 depends on the initial rating column
+# and not on the modified rating column
+video_games_reviews.select(
+    pl.col("rating") * 20,  # modified column
+    rating_out_of_10=pl.col("rating"),  # new column
+).head(2)
+```
+
+```{python}
+# If we want the new column to depend on the modified column, we can add a new context
+# where we do the calculation
+# A new context is a new select or with_columns
+video_games_reviews.select(
+    pl.col("rating") * 20,  # modified column
+).with_columns(  # new context
+    rating_out_of_10=pl.col("rating")  # new column
+).head(2)
+```
+
+```{python}
+# When adding columns with with_columns(), non-specified columns are included by default
+# with_columns() includes all columns by default, and
+# adds or modifies the specified columns
+video_games_reviews.with_columns(
+    pl.col("rating") * 20,  # modified column
+    rating_out_of_10=pl.col("rating"),  # new column
+).head(2)
+```
+
+```{python}
+# Combine 2 columns together
+# We need to cast the rating column to a string data type (we see this later)
+video_games_reviews.select(
+    review_text_and_score=pl.col("review_text")
+    + pl.lit(" - ")
+    + pl.col("rating").cast(pl.String)
+).head(2)
+```
+
+```{python}
+# Combine columns using pl.format
+video_games_reviews.select(
+    review_text_and_score=pl.format("review: {}, on {}", "review_text", "review_date")
+).head(2)
+```
+
+#### Methods on dataframes and expressions
+
+```{python}
+# Methods can be applied on the dataframe
+video_games_reviews.min()
+```
+
+```{python}
+# Methods can also be applied on expressions
+# In this example, the result is the same
+video_games_reviews.select(pl.all().min())
+```
+
+```{python}
+# Sorting the dataframe sorts all rows in the dataframe based on the review date
+video_games_reviews.sort(by="review_date")
+```
+
+```{python}
+# Sorting the column using an expression sorts only the column
+# In this example, the result of applying on the dataframe and on the column is not the same
+# With expressions, each column is calculated independently of the other ones
+video_games_reviews.with_columns(pl.col("review_date").sort())
+```
+
+#### Advanced column selection
+
+```{python}
+pl.Config.set_tbl_cols(7)
+```
+
+```{python}
+# Calculate the quantiles of the rating column: one decile per column
+video_games_reviews.select(
+    pl.col("rating").quantile(i / 100).alias(f"perc_{i}") for i in range(0, 101, 10)
+)
+```
+
+```{python}
+# Count the number of unique values for each column
+video_games_reviews.select(pl.all().n_unique())
+```
+
+```{python}
+# Verify which columns have less than 5 unique values
+video_games_reviews.select(pl.all().n_unique() < 5)
+```
+
+```{python}
+# Extract the columns with 4 unique values or less
+# .any() returns True if any value is True so it filters the columns
+[
+    column.name
+    for column in video_games_reviews.select(pl.all().n_unique() < 5)
+    if column.any()
+]
+```
+
+```{python}
+# Select columns that have 4 unique values or less
+video_games_reviews.select(
+    column.name
+    for column in video_games_reviews.select(pl.all().n_unique() <= 4)
+    if column.any()
+).head(2)
+```
+
+#### Filter columns
+
+```{python}
+# Filter dataframe based on one value
+video_games_reviews.filter(pl.col("title") == "Zelda")
+```
+
+```{python}
+# Filter dataframe based on multiple values
+video_games_reviews.filter(pl.col("title").is_in(["Zelda", "Super Mario"]))
+```
+
+```{python}
+# Filter dataframe based on multiple values : use AND &
+video_games_reviews.filter((pl.col("rating") == 8) & (pl.col("title") == "Zelda"))
+```
+
+```{python}
+# Filter dataframe based on multiple values : use OR |
+video_games_reviews.filter((pl.col("rating") == 9.5) | (pl.col("title") == "Zelda"))
+```
+
+```{python}
+# Filter dataframe using numerical values: ratings bigger or equal to 8 and less than 10
+video_games_reviews.filter((pl.col("rating") >= 8) & (pl.col("rating") < 10))
+```
+
+```{python}
+# Filter dataframe using regex: filter all videogame titles that contain 'Super' or 'Infinite'
+video_games_reviews.filter(pl.col("title").str.contains("Super|Infinite"))
+```
+
+```{python}
+# Filter based on a calculation: show the rating with the latest date
+video_games_reviews.filter(pl.col("review_date") == pl.col("review_date").max())
+```
+
+#### Unique and duplicated values
+
+```{python}
+# For reviews that appear more than once, keep only one review
+# I keep only one review for Super Mario that has duplicated reviews
+video_games_reviews.unique()
+```
+
+```{python}
+# Show only the reviews appearing once
+# This fully remove Super Mario who had the same review twice
+video_games_reviews.filter(video_games_reviews.is_unique())
+```
+
+```{python}
+# Show only duplicated reviews:
+# Show only reviews appearing more than once in the table
+video_games_reviews.filter(video_games_reviews.is_duplicated())
+```
+
+```{python}
+# Show only games with one review
+# Applying is_unique() to title gives the rows where the title is unique
+video_games_reviews.filter(pl.col("title").is_unique())
+```
+
+```{python}
+# Show only games with 2 or more reviews
+video_games_reviews.filter(pl.col("title").is_duplicated())
+```
+
+```{python}
+# Count the number of unique reviews
+# Excludes the duplicated review for Super Mario
+video_games_reviews.n_unique()
+```
+
+```{python}
+# Count the number of reviews that are duplicates
+video_games_reviews.height - video_games_reviews.n_unique()
+```
+
+```{python}
+# Keep only one review for each combination of title and rating
+video_games_reviews.unique(subset=["title", "rating"])
+```
+
+```{python}
+# Show all unique values for rating
+# Equivalent to the SQL command: SELECT DISTINCT rating FROM video_games_reviews
+video_games_reviews.select(pl.col("rating").unique())
+```
+
+```{python}
+# Count the unique values for each column
+video_games_reviews.select(pl.all().n_unique())
+```
+
+```{python}
+# Show unique value and their count for a column
+video_games_reviews.select(pl.col("title").value_counts(sort=True))
+```
+
+#### Expression expansion and pl.struct()
+
+```{python}
+# Polars expressions referring to more than one column expand to a list of expressions
+# This applies to all expressions
+# pl.col('title','rating').is_duplicated() expands to
+# [pl.col('title').is_duplicated(), pl.col('rating').is_duplicated()]
+video_games_reviews.with_columns(
+    pl.col("title", "rating").is_duplicated().suffix("_is_duplicated")
+)
+```
+
+```{python}
+# To use a function on the combination of multiple columns, and not on each column separately,
+# we can use the pl.struct() function
+# pl.struct() creates a new column with a 'struct' that corresponds to the combination of the columns
+video_games_reviews.with_columns(
+    pl.struct("title", "rating").alias("struct_title_rating")
+)
+```
+
+```{python}
+# We can apply functions to the struct column
+video_games_reviews.with_columns(
+    pl.struct("title", "rating").is_duplicated().alias("title_rating_is_duplicated")
+)
+```
+
+#### Missing Values
+
+```{python}
+# Count missing values for each column
+video_games_reviews.null_count()
+```
+
+```{python}
+# Filter rows with missing values for text column
+video_games_reviews.filter(pl.col("review_text").is_null())
+```
+
+```{python}
+# Drop rows with missing values for review text column
+video_games_reviews.filter(pl.col("review_text").is_not_null())
+```
+
+```{python}
+# Drop all rows where at least one value is missing
+video_games_reviews.drop_nulls()
+```
+
+```{python}
+# Drop rows where either review text and title are null
+video_games_reviews.drop_nulls(subset=["title", "review_text"])
+```
+
+```{python}
+# Fill null values for review_text column with 'No review'
+video_games_reviews.with_columns(pl.col("review_text").fill_null("No review"))
+```
+
+```{python}
+# Create a new dataset to demonstrate additional functions for filling nulls
+df_missing_values = pl.DataFrame(
+    {"a": [1, None, None, 9], "b": [1, None, 9, 10], "c": [6, None, 6, None]}
+)
+
+df_missing_values
+```
+
+```{python}
+# Replace missing values with the median of the column
+df_missing_values.with_columns(pl.all().fill_null(pl.all().median()))
+```
+
+```{python}
+# Interpolate missing values for numbers
+df_missing_values.interpolate()
+```
+
+```{python}
+# Forward fill missing values for a column
+df_missing_values.with_columns(pl.col("a").forward_fill())
+```
+
+```{python}
+# Forward fill missing values for all columns
+df_missing_values.fill_null(strategy="forward")
+```
+
+```{python}
+# Backward fill missing values for all columns
+df_missing_values.fill_null(strategy="backward")
+```
+
+#### Conditions using `all` and `any`
+
+```{python}
+# We use the dataframe missing_values to demonstrate verifying multiple conditions
+df_missing_values = pl.DataFrame(
+    {"a": [1, None, None, 9], "b": [1, None, 9, 10], "c": [6, None, 6, None]}
+)
+
+df_missing_values
+```
+
+```{python}
+# Identify which values are missing for all columns
+df_missing_values.with_columns(pl.col("a", "b").is_null().name.suffix("_is_null"))
+```
+
+```{python}
+df_missing_values.with_columns(
+    pl.all_horizontal(pl.col("a", "b").is_null()).alias("cols_a_b_are_null")
+)
+```
+
+```{python}
+# Filter all rows with all values missing
+df_missing_values.filter(pl.all_horizontal(pl.col("a", "b").is_null()))
+```
+
+```{python}
+# Filter all rows with at least one missing value
+df_missing_values.filter(pl.any_horizontal(pl.all().is_null()))
+```
+
+```{python}
+# Filter all rows with no missing values
+df_missing_values.filter(pl.all_horizontal(pl.col("a", "b").is_not_null()))
+```
+
+#### Slicing and indexing
+
+```{python}
+# Keep 2 rows starting at row 3
+video_games_reviews.slice(3, 2)
+```
+
+```{python}
+# Square brackets indexing should be limited to:
+# 1. Extract a scalar value (another option is using .item() )
+# 2. Convert a DataFrame to a Series (another option is using .get_column() )
+# 3. Inspecting some rows or columns
+# In general, select, with_columns, and filter should be used instead of square brackets indexing
+# ! Disadvantages: Square brackets selecting only works in eager mode, and is not parallelized
+# Select 2 rows starting at row 3
+video_games_reviews[3:5]
+```
+
+```{python}
+# Select 3 rows starting at row 5 for columns title and rating
+video_games_reviews[3:5, ["title", "rating"]]
+```
+
+```{python}
+# Select 3 rows starting at row 5 for columns 0 and 1
+video_games_reviews[3:5, [0, 1]]
+```
+
+```{python}
+# Select columns title and rating using indexes
+video_games_reviews[["title", "rating"]]
+```
+
+#### Extracting columns, rows, dataframes and items
+
+```{python}
+# Extract a column from a DataFrame and convert it to a Series
+video_games_reviews.get_column("title").head(2)
+```
+
+```{python}
+# Extract all columns and convert them to a list of Series
+video_games_reviews.head(1).get_columns()
+```
+
+```{python}
+# Convert a column to a list using .to_list()
+video_games_reviews.get_column("title").to_list()
+```
+
+```{python}
+# Extract rows from a dataframe as a list of tuples
+# ! This materializes all the rows in memory. It's expensive and should be avoided when possible
+video_games_reviews.rows()
+```
+
+```{python}
+# Extract rows from a dataframe as a list of dicts (more expensive)
+# ! This materializes all the rows in memory. It's expensive and should be avoided when possible
+video_games_reviews.rows(named=True)
+```
+
+```{python}
+# Extract rows from a dataframe as an iterator
+# ! Export methods of Polars should be preferred instead of iterating over rows
+video_games_reviews.iter_rows()
+```
+
+```{python}
+# Extract slices of 1000 rows from a dataframe as an iterator
+video_games_reviews.iter_slices(n_rows=1000)
+```
+
+```{python}
+# Extract a list of Dataframes partitioned based on the specified column
+video_games_reviews.partition_by("title")
+```
+
+```{python}
+# Extract a scalar using .item()
+# .item() transforms a table of one row and one column into a scalar
+video_games_reviews.head(1).select("title").item()
+```
+
+```{python}
+# Convert a dataframe to a Python dictionary using .to_dict()
+video_games_reviews.to_dict(as_series=False)
+```
+
+```{python}
+# Convert the dataframe to a Pandas using .to_pandas()
+video_games_reviews.to_pandas()
+```
+
+```{python}
+# Convert the dataframe to a Numpy array using .to_numpy()
+video_games_reviews.to_numpy()
+```
+
+#### Mathematical and statistical operations
+
+```{python}
+# Sums all values of a column
+video_games_reviews.sum()
+```
+
+```{python}
+# Get the maximum values of each column
+video_games_reviews.max()
+```
+
+```{python}
+# Get the minimum values of each column
+video_games_reviews.min()
+```
+
+```{python}
+# Get the median value of each column
+# Does not work for string or date columns
+video_games_reviews.median()
+```
+
+```{python}
+# Get the mean value of each column
+# Does not work for string or date columns
+video_games_reviews.mean()
+```
+
+```{python}
+# Get the 10th percentile value of each column
+# Does not work for string or date columns
+video_games_reviews.quantile(0.1)
+```
+
+```{python}
+# Calculates the variance between values in a column
+video_games_reviews.var()
+```
+
+```{python}
+# Calculates the standard deviation between values in a column
+video_games_reviews.std()
+```
+
+```{python}
+import numpy as np
+
+# Use a Numpy universal function: np.exp on a column
+video_games_reviews.with_columns(np.exp(pl.col("rating")))
+```
+
+
